@@ -1,0 +1,56 @@
+resource "aws_instance" "windows16-production" {
+
+  connection = {
+    type    = "winrm"
+    password  = "Q@AGeKde691n1n1n1@"
+    agent     = "false"
+    insecure  = true
+    https     = false
+  }
+
+  ami                         = "${data.aws_ami.windows2016.id}"
+  instance_type               = "t2.micro"
+  key_name                    = "${var.aws_key_pair_name}"
+  subnet_id                   = "${var.aws_subnet_id}"
+  vpc_security_group_ids      = ["${aws_security_group.base_windows.id}", "${aws_security_group.habitat_supervisor.id}"]
+  associate_public_ip_address = true
+  user_data = "${file("${path.module}/templates/winrm_setup.txt")}"
+
+  tags {
+    Name          = "aws_windows16_production_${random_id.instance_id.hex}"
+    X-Dept        = "${var.tag_dept}"
+    X-Customer    = "${var.tag_customer}"
+    X-Project     = "${var.tag_project}"
+    X-Application = "${var.tag_application}"
+    X-Contact     = "${var.tag_contact}"
+    X-TTL         = "${var.tag_ttl}"
+  }
+
+  provisioner "local-exec" {
+    command = "powershell.exe sleep 120"
+  }
+
+  provisioner "file" {
+    source = "${path.module}/templates/windows-chef-base.toml"
+    destination = "c:/hab/svc/chef-base/user.toml"
+  }
+
+  provisioner "file" {
+    source = "${path.module}/templates/windows_baseline.toml"
+    destination = "c:/hab/svc/windows_baseline/user.toml"
+  }
+
+  provisioner "remote-exec" {
+    connection = {
+      type    = "winrm"
+      password  = "Q@AGeKde691n1n1n1@"
+      agent     = "false"
+      insecure  = true
+      https     = false
+    }
+    inline = [
+      "powershell.exe C:/ProgramData/chocolatey/bin/hab svc load habichef/chef-base --strategy at-once",
+      "powershell.exe c:/ProgramData/chocolatey/bin/hab svc load habichef/windows_baseline --channel unstable --strategy at-once"
+    ]
+  } 
+}

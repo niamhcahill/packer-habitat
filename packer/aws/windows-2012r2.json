@@ -1,0 +1,56 @@
+{
+  "variables": {
+    "aws_access_key": "{{env `AWS_ACCESS_KEY`}}",
+    "aws_secret_key": "{{env `AWS_SECRET_KEY`}}",
+    "winrm_username": "Administrator",
+    "region":         "us-east-1",
+    "customer_name":  "Test",
+    "dept":           "ACE",
+    "instance_type":  "t2.small"
+  },
+  "builders": [
+    {
+      "type":          "amazon-ebs",
+      "access_key":    "{{ user `aws_access_key` }}",
+      "secret_key":    "{{ user `aws_secret_key` }}",
+      "region":        "{{ user `region` }}",
+      "instance_type": "{{ user `instance_type` }}",
+      "source_ami_filter": {
+        "filters": {
+          "virtualization-type": "hvm",
+          "name": "Windows_Server-2012-R2_RTM-English-64Bit-Base*",
+          "root-device-type": "ebs"
+        },
+        "most_recent": true,
+        "owners": "amazon"
+      },
+      "ami_name": "{{ user `customer_name` }}_{{ user `dept` }}_windows_2012_r2_full_{{timestamp}}",
+      "user_data_file": "../templates/windows_bootstrap.txt",
+      "communicator": "winrm",
+      "winrm_username": "{{user `winrm_username` }}"
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "powershell",
+      "inline": [
+        "iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))",
+        "C:/ProgramData/chocolatey/choco install habitat -y",
+        "New-NetFirewallRule -DisplayName \"Habitat TCP\" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 9631,9638",
+        "New-NetFirewallRule -DisplayName \"Habitat UDP\" -Direction Inbound -Action Allow -Protocol UDP -LocalPort 9638",
+        "C:\\ProgramData\\chocolatey\\bin\\hab pkg install core/windows-service",
+        "C:\\ProgramData\\chocolatey\\bin\\hab pkg exec core/windows-service install",
+        "C:\\ProgramData\\chocolatey\\bin\\hab pkg install core/hab-sup",
+        "C:\\ProgramData\\chocolatey\\bin\\hab pkg install habichef/windows_baseline --channel unstable",
+        "C:\\ProgramData\\chocolatey\\bin\\hab pkg install habichef/chef-base",
+        "$env:PATH = \"$(hab pkg path thelunaticscripter/chef-client)/chef/bin;$(hab pkg path thelunaticscripter/inspec)/inspec/bin;$env:PATH\"",
+        "cd (C:/ProgramData/chocolatey/bin/hab.exe pkg path habichef/chef-base)",
+        "Write-Host 'Starting Chef Client Run'",
+        "chef-client -z -c config/bootstrap-config.rb",
+        "inspec exec \"$(hab pkg path habichef/windows_baseline)/dist\" --json-config \"$(hab pkg path habichef/windows_baseline)/config/bootstrap-inspec.json\" --no-distinct-exit --target-id packer-windows-2012r2",
+        "if($lastexitcode -ne 0) {Write-Output \"InSpec run failed check Automate for results\";exit 1}",
+        "C:\\progra~1\\Amazon\\Ec2ConfigService\\Ec2Config.exe -sysprep"
+      ]
+    }
+  ]
+}

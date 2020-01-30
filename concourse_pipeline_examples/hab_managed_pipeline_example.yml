@@ -1,0 +1,168 @@
+shared:
+  - &terraform-vars
+    aws_vpc_id: <AWS_VPC_ID>
+    aws_subnet_id: <AWS_SUBNET_ID>
+    aws_region: <AWS_REGION>
+    aws_key_pair_file: <AWS_KEY_PAIR_NAME>
+
+resource_types:
+  - name: habitat-package
+    type: docker-image
+    source:
+      repository: jonlives/hab-resource
+      tag: latest
+  - name: packer
+    type: docker-image
+    source:
+      repository: abaker9/concourse-packer-resource
+  - name: terraform
+    type: docker-image
+    source:
+      repository: ljfranklin/terraform-resource
+
+resources:
+  - name: chef-base Bldr App
+    type: habitat-package
+    source:
+      origin: <HAB_ORIGIN>
+      name: chef-base
+      channel: unstable
+      auth_token: <HAB_TOKEN>
+
+  - name: packer
+    type: packer
+    source:
+      aws_access_key_id: <AWS_ACCESS_KEY>
+      aws_secret_access_key: <AWS_SECRET_KEY>
+      region: <AWS_REGION>
+
+  - name: git-repo
+    type: git
+    source:
+      uri: <GIT_REPO>
+      branch: master
+      private_key: <GIT_PRIVATE_KEY>
+
+  - name: terraform
+    type: terraform
+    source:
+      storage:
+        bucket: <AWS_S3_BUCKET_NAME>
+        bucket_path: /
+        region_name: <AWS_REGION>
+        access_key_id: <AWS_ACCESS_KEY>
+        secret_access_key: <AWS_SECRET_KEY>
+      env:
+        AWS_ACCESS_KEY_ID: <AWS_ACCESS_KEY>
+        AWS_SECRET_ACCESS_KEY: <AWS_SECRET_KEY>
+
+jobs:
+  - name: Promote chef-base to dev
+    serial_groups: [track1]
+    plan:
+      - get: git-repo
+        trigger: false
+      - get: chef-base Bldr App
+        trigger: true
+      - put: chef-base Bldr App
+        params: {promote_to: dev}
+  - name: CentOS 7 AWS Image Build
+    serial_groups: [track1]
+    plan:
+      - get: git-repo
+        passed: [Promote chef-base to dev]
+        trigger: true
+      - put: packer
+        params:
+          filepath: git-repo/packer/aws/centos-7.json
+  - name: CentOS 7 Azure Image Build
+    serial_groups: [track3]
+    plan:
+      - get: git-repo
+        passed: [Promote chef-base to dev]
+        trigger: true
+      - put: packer
+        params:
+          filepath: git-repo/packer/azure/centos-7.json
+  - name: Windows 2016 AWS Image Build
+    serial_groups: [track2]
+    plan:
+      - get: git-repo
+        passed: [Promote chef-base to dev]
+        trigger: true
+      - put: packer
+        params:
+          filepath: git-repo/packer/aws/windows-2016.json
+  - name: Windows 2016 Azure Image Build
+    serial_groups: [track4]
+    plan:
+      - get: git-repo
+        passed: [Promote chef-base to dev]
+        trigger: true
+      - put: packer
+        params:
+          filepath: git-repo/packer/azure/windows-2016.json
+  - name: Terraform Plan (AWS)
+    serial_groups: [track1]
+    plan:
+      - get: git-repo
+        passed: [CentOS 7 AWS Image Build,Windows 2016 AWS Image Build]
+        trigger: true
+      - put: terraform
+        params:
+          terraform_source: git-repo/terraform/aws/demo_instances
+          env_name: production
+          plan_only: true
+          vars: *terraform-vars
+  - name: Terraform Apply (AWS)
+    serial_groups: [track1]
+    plan:
+      - get: terraform
+        trigger: true
+        passed: [Terraform Plan (AWS)]
+      - get: git-repo
+        trigger: true
+        passed: [Terraform Plan (AWS)]
+      - put: terraform
+        params:
+          terraform_source: git-repo/terraform/aws/demo_instances
+          env_name: production
+          plan_run: true
+          vars: *terraform-vars
+  - name: Terraform Plan (Azure)
+    serial_groups: [track1]
+    plan:
+      - get: git-repo
+        passed: [CentOS 7 Azure Image Build,Windows 2016 Azure Image Build]
+        trigger: true
+      - put: terraform
+        params:
+          terraform_source: git-repo/terraform/azure/demo_instances
+          env_name: production-azure
+          plan_only: true
+          vars: *terraform-vars
+  - name: Terraform Apply (Azure)
+    serial_groups: [track1]
+    plan:
+      - get: terraform
+        trigger: true
+        passed: [Terraform Plan (Azure)]
+      - get: git-repo
+        trigger: true
+        passed: [Terraform Plan (Azure)]
+      - put: terraform
+        params:
+          terraform_source: git-repo/terraform/azure/demo_instances
+          env_name: production-azure
+          plan_run: true
+          vars: *terraform-vars
+  - name: Terraform Destroy AWS (USE WITH CAUTION)
+    plan:
+      - get: git-repo
+        trigger: false
+      - put: terraform
+        params:
+          env_name: production
+          terraform_source: git-repo/terraform/aws/demo_instances
+          vars: *terraform-vars
+          action: destroy

@@ -1,0 +1,69 @@
+////////////////////////////////
+// AWS Connection
+
+aws_region="us-east-1"
+
+aws_profile="default"
+
+aws_credentials_file="~/.aws/credentials"
+
+aws_key_pair_file = "~/.ssh/habichef_demo.pem"
+
+aws_key_pair_name = "habichef_demo"
+
+////////////////////////////////
+// Object Tags
+
+tag_customer="habichef-demo"
+
+tag_project="habichef-demo"
+
+tag_name="cheffy mcchef"
+
+tag_dept="ace"
+
+tag_contact="success@chef.io"
+
+tag_application="habichef"
+
+////////////////////////////////
+// Automate Config
+
+automate_hostname="jv-a2.chef-demo.com"
+
+// If you have an automate license please insert below otherwise leave as is and 
+// you will be issued alicnse at first login of chef automate
+
+automate_license = ""
+
+// NOTE: If you have an acm cert and r53 managed hosted zone, you
+// can use chef_automate_alb.tf.example to build out an ALB with SSL
+// and DNS via R53.
+// ** You do not need to set custom ssl key and chain in this scenario **
+
+automate_alb_acm_matcher = "*.chef-demo.com"
+automate_alb_r53_matcher = "chef-demo.com."
+
+automate_custom_ssl = "false"
+automate_custom_ssl_private_key = <<EOF
+Insert private key here
+EOF
+
+automate_custom_ssl_cert_chain = <<EOF
+Insert cert chain here
+EOF
+
+/////////////////////////////////
+// Concourse CI Variables
+
+concourse_db_node_size="t2.medium"
+
+concourse_web_node_size="t2.medium"
+
+concourse_worker_node_size="t2.medium"
+
+concourse_worker_count="3"
+
+concourse_user_name="admin"
+
+concourse_user_password="aws123"

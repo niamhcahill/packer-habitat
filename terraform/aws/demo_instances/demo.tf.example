@@ -1,0 +1,66 @@
+resource "aws_instance" "aws-centos7-production" {
+  connection {
+    user        = "centos"
+    private_key = "${file("${var.aws_key_pair_file}")}"
+  }
+
+  ami                         = "${data.aws_ami.centos7.id}"
+  instance_type               = "t2.micro"
+  key_name                    = "${var.aws_key_pair_name}"
+  subnet_id                   = "${var.aws_subnet_id}"
+  vpc_security_group_ids      = ["${aws_security_group.base_linux.id}", "${aws_security_group.habitat_supervisor.id}"]
+  associate_public_ip_address = true
+
+  tags {
+    Name          = "aws_centos_production_${random_id.instance_id.hex}"
+    X-Dept        = "${var.tag_dept}"
+    X-Customer    = "${var.tag_customer}"
+    X-Project     = "${var.tag_project}"
+    X-Application = "${var.tag_application}"
+    X-Contact     = "${var.tag_contact}"
+    X-TTL         = "${var.tag_ttl}"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo hostname aws-centos7-${var.habitat_dev_channel}",
+    ]
+
+    connection {
+      host        = "${self.public_ip}"
+      type        = "ssh"
+      user        = "${var.aws_centos_image_user}"
+      private_key = "${file("${var.aws_key_pair_file}")}"
+    }
+  }
+
+  provisioner "habitat" {
+    use_sudo     = true
+    service_type = "systemd"
+
+    connection {
+      host        = "${self.public_ip}"
+      type        = "ssh"
+      user        = "${var.aws_centos_image_user}"
+      private_key = "${file("${var.aws_key_pair_file}")}"
+    }
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo hostname aws-centos7-production",
+      "sudo echo aws-centos7-production /proc/sys/kernel/hostname",
+      "sudo su -c 'uuidgen > /etc/machine-id'",
+      "sudo groupadd hab",
+      "sudo useradd -g hab hab",
+      "sudo sleep 20"
+    ]
+
+    connection {
+      host        = "${self.public_ip}"
+      type        = "ssh"
+      user        = "${var.aws_centos_image_user}"
+      private_key = "${file("${var.aws_key_pair_file}")}"
+    }
+  }
+}

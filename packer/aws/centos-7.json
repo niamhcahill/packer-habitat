@@ -1,0 +1,52 @@
+{
+  "variables": {
+    "aws_access_key": "AKIAJJGWMO3WLNNAV6KA",
+    "aws_secret_key": "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",
+    "ssh_username":   "centos",
+    "region":         "us-east-1",
+    "customer_name":  "Test",
+    "dept":           "ACE",
+    "instance_type":  "t2.small"
+  },
+  "builders": [
+    {
+      "type":          "amazon-ebs",
+      "access_key": "AKIAJJGWMO3WLNNAV6KA",
+      "secret_key": "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",
+      "region": "us-east-1",
+      "instance_type": "t2.small",
+      "source_ami_filter": {
+        "filters": {
+          "virtualization-type": "hvm",
+          "name": "CentOS Linux 7 x86_64 HVM EBS*",
+          "root-device-type": "ebs"
+        },
+        "most_recent": true,
+        "owners": "679593333241"
+      },
+      "ami_name": "habichef_demo_centos_7_{{timestamp}}",
+      "user_data_file": "../templates/windows_bootstrap.txt",
+      "ssh_username": "centos"
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "inline": [
+        "sleep 10",
+        "curl https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | sudo bash",
+        "sudo groupadd hab",
+        "sudo useradd -g hab hab",
+        "echo 'installing the chef client'",
+        "sudo hab pkg install habichef/chef-base --channel dev",
+        "cd `hab pkg path habichef/chef-base`",
+        "sudo echo \"{\\\"bootstrap_mode\\\": true}\" > /tmp/bootstrap.json",
+        "sudo hab pkg exec chef/chef-client chef-client -z -j /tmp/bootstrap.json -c config/bootstrap-config.rb",
+        "sudo rm /tmp/bootstrap.json",
+        "echo 'installing inspec'",
+        "sudo hab pkg install habichef/compliance --channel unstable",
+        "sudo hab pkg exec chef/inspec inspec exec compliance://admin@example.com/linux-baseline-habichef --no-distinct-exit --json-config `hab pkg path habichef/compliance`/config/bootstrap-inspec.json"
+      ]
+    }
+  ]
+}
